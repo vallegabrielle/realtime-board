@@ -2,4 +2,7 @@ packages:
   - web
   - server
 
+allowBuilds:
+  esbuild: true
+
 savePrefix: ""

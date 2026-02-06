@@ -7,12 +7,20 @@
 		"node": ">=24"
 	},
 	"scripts": {
+		"dev": "pnpm -r --parallel dev",
+		"build": "pnpm -r build",
+		"start": "pnpm --filter server start",
+		"db:generate": "pnpm --filter server exec drizzle-kit generate --config=../drizzle.config.ts",
+		"db:push": "pnpm --filter server exec drizzle-kit push --config=../drizzle.config.ts",
 		"lint": "biome check .",
 		"format": "biome check --write .",
-		"typecheck": "pnpm -r typecheck"
+		"typecheck": "pnpm -r typecheck",
+		"test": "pnpm --filter web test",
+		"test:e2e": "pnpm exec playwright test"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "2.5.15",
+		"@playwright/test": "1.64.1",
 		"typescript": "7.0.2"
 	}
 }
