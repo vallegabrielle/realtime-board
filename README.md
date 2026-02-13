@@ -1,6 +1,38 @@
 # Realtime Board
 
-A collaborative kanban board built with React, Hono, Postgres, Yjs, and Hocuspocus. Guests can try the shared demo board; GitHub sign-in is available when OAuth credentials are configured.
+A collaborative kanban board built with React, Hono, Postgres, Yjs, and Hocuspocus. Move cards with your team, see who's online, and keep working through a lost connection.
+
+![Realtime Board showing a product launch board with three columns](docs/board.png)
+
+[Watch a short collaboration demo](docs/collaboration.webm)
+
+## Try it locally
+
+Follow the setup below, select **Try demo**, and open the demo workspace in two separate browser sessions. Add or move a card in one window and watch it appear in the other. Move your cursor to see live presence, or disconnect one session and reconnect it after making an edit.
+
+The demo workspace is shared by anonymous users and resets periodically. Avoid putting private information in it.
+
+## Highlights
+
+- Real-time cards, columns, presence, and cursors across browser sessions.
+- Invitations with editor or viewer permissions, enforced on the server.
+- Offline edits stored in IndexedDB and synchronized after reconnecting.
+- Local undo and redo, drag-and-drop ordering, due dates, and assignees.
+- Guest access and optional GitHub sign-in.
+
+## Design decisions
+
+Concurrent card moves are a tricky case: deleting a card from one list and inserting it into another can create duplicates when people move it at the same time. Each card instead has a stable identity, a column ID, and an order key in a Yjs document. Yjs merges concurrent changes, while fractional order keys allow cards to be reordered without renumbering the entire column.
+
+```mermaid
+flowchart LR
+    A[React browser] <-->|WebSocket: Yjs and presence| B[Hono + Hocuspocus]
+    A <-->|HTTP: auth and boards| B
+    A --- C[IndexedDB offline cache]
+    B <--> D[(Postgres)]
+```
+
+Board content is stored as Yjs snapshots; memberships and invitations are stored in relational tables. This favors collaborative editing, with trade-offs described below.
 
 ## Local development
 

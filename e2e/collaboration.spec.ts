@@ -9,6 +9,35 @@ async function loginAsGuest(page: import("@playwright/test").Page) {
 	).toBeVisible();
 }
 
+test("mobile navigation and keyboard dialogs remain usable", async ({
+	browser,
+}) => {
+	const context = await browser.newContext({
+		viewport: { width: 375, height: 812 },
+	});
+	const page = await context.newPage();
+	await loginAsGuest(page);
+	await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible();
+	await page.getByRole("button", { name: "Create board", exact: true }).click();
+	const dialog = page.getByRole("dialog", { name: "Create a board" });
+	await expect(dialog).toBeVisible();
+	await expect(page.getByLabel("Board name")).toBeFocused();
+	await page.keyboard.press("Escape");
+	await expect(dialog).not.toBeVisible();
+	await page.getByRole("button", { name: "Demo workspace" }).first().click();
+	await expect(
+		page.getByRole("heading", { name: "Demo workspace" }),
+	).toBeVisible();
+	await expect(
+		page.getByRole("status", { name: "Connection status" }),
+	).toBeVisible();
+	const horizontalOverflow = await page.evaluate(
+		() => document.documentElement.scrollWidth > window.innerWidth,
+	);
+	expect(horizontalOverflow).toBe(false);
+	await context.close();
+});
+
 test("two guests see board edits and presence live", async ({ browser }) => {
 	const ownerContext = await browser.newContext();
 	const owner = await ownerContext.newPage();
@@ -115,6 +144,9 @@ test("two guests see board edits and presence live", async ({ browser }) => {
 		guestDoneColumn.getByText("Concurrent card").first(),
 	).toBeVisible();
 	await ownerContext.setOffline(true);
+	await expect(
+		owner.getByRole("status", { name: "Connection status" }),
+	).toHaveText("Offline");
 	await owner
 		.getByRole("button", { name: "Add card to In Progress", exact: true })
 		.click();
@@ -126,6 +158,9 @@ test("two guests see board edits and presence live", async ({ browser }) => {
 	await expect(owner.getByText("Saved while offline")).toBeVisible();
 	await ownerContext.setOffline(false);
 	await expect(guest.getByText("Saved while offline")).toBeVisible();
+	await expect(
+		owner.getByRole("status", { name: "Connection status" }),
+	).toHaveText("Connected");
 
 	await owner.getByLabel("Invite role").selectOption("viewer");
 	const viewerInviteResponse = owner.waitForResponse(
@@ -145,6 +180,56 @@ test("two guests see board edits and presence live", async ({ browser }) => {
 	await expect(
 		viewer.getByRole("button", { name: "Add card to To Do", exact: true }),
 	).toBeDisabled();
+	await viewer.goto(`http://localhost:5173/boards/${boardId}`);
+	await expect(
+		viewer.getByRole("heading", { name: "Live collaboration" }),
+	).toBeVisible();
+	await viewer.evaluate(async (id) => {
+		const yjsPath = "/node_modules/.vite/deps/yjs.js";
+		const providerPath = "/node_modules/.vite/deps/@hocuspocus_provider.js";
+		const modelPath = "/src/board-model.ts";
+		const Y = await import(yjsPath);
+		const { HocuspocusProvider } = await import(providerPath);
+		const { createCard, readColumns } = await import(modelPath);
+		const document = new Y.Doc();
+		const provider = new HocuspocusProvider({
+			url: `${location.protocol === "https:" ? "wss:" : "ws:"}//${location.host}/sync/${id}`,
+			name: id,
+			document,
+		});
+		await new Promise<void>((resolve, reject) => {
+			const timer = setTimeout(
+				() => reject(new Error("Viewer sync timed out")),
+				10000,
+			);
+			provider.on("synced", () => {
+				clearTimeout(timer);
+				resolve();
+			});
+		});
+		const column = readColumns(document)[0];
+		if (!column) throw new Error("Board has no columns");
+		createCard(document, "Unauthorized viewer edit", column.id);
+		await new Promise((resolve) => setTimeout(resolve, 500));
+		provider.destroy();
+		document.destroy();
+	}, boardId);
+	await expect(owner.getByText("Unauthorized viewer edit")).toHaveCount(0);
+	await viewer.reload();
+	await expect(
+		viewer.getByRole("heading", { name: "Live collaboration" }),
+	).toBeVisible();
+	await expect(viewer.getByText("Edited by guest")).toBeVisible();
+	await expect(viewer.getByText("Unauthorized viewer edit")).toHaveCount(0);
+	const viewerDelete = await viewer.request.delete(`/api/boards/${boardId}`);
+	expect(viewerDelete.status()).toBe(404);
+	const viewerInviteAttempt = await viewer.request.post(
+		`/api/boards/${boardId}/invites`,
+		{
+			data: { role: "editor" },
+		},
+	);
+	expect(viewerInviteAttempt.status()).toBe(403);
 	if (boardId) await owner.request.delete(`/api/boards/${boardId}`);
 
 	await ownerContext.close();

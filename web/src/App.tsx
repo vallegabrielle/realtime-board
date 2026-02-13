@@ -2,7 +2,7 @@ import { DragDropProvider, useDroppable } from "@dnd-kit/react";
 import { isSortable, useSortable } from "@dnd-kit/react/sortable";
 import { HocuspocusProvider } from "@hocuspocus/provider";
 import type { ComponentProps, ReactNode } from "react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { IndexeddbPersistence } from "y-indexeddb";
 import * as Y from "yjs";
 import { authClient } from "./auth.ts";
@@ -53,6 +53,7 @@ function ActionDialog({
 	onClose: () => void;
 }) {
 	const dialogRef = useRef<HTMLDialogElement>(null);
+	const titleId = useId();
 	const inputRef = useRef<HTMLInputElement>(null);
 	const [value, setValue] = useState(options.initialValue ?? "");
 	useEffect(() => {
@@ -61,6 +62,7 @@ function ActionDialog({
 	}, []);
 	return (
 		<dialog
+			aria-labelledby={titleId}
 			ref={dialogRef}
 			onCancel={onClose}
 			className="m-auto w-[calc(100%-2rem)] max-w-md rounded-3xl bg-white p-0 text-ink shadow-2xl backdrop:bg-slate-900/40 backdrop:backdrop-blur-sm"
@@ -79,7 +81,7 @@ function ActionDialog({
 						<p className="text-xs font-bold tracking-widest text-primary uppercase">
 							Realtime Board
 						</p>
-						<h2 className="mt-2 text-2xl font-bold tracking-tight">
+						<h2 className="mt-2 text-2xl font-bold tracking-tight" id={titleId}>
 							{options.title}
 						</h2>
 					</div>
@@ -231,6 +233,7 @@ function BoardRoom({ board }: { board: Board }) {
 	const [shareError, setShareError] = useState("");
 	const [members, setMembers] = useState<BoardMember[]>([]);
 	const [status, setStatus] = useState("connecting");
+	const [online, setOnline] = useState(navigator.onLine);
 	const [synced, setSynced] = useState(false);
 	const [presence, setPresence] = useState<
 		Array<{ id: number; name: string; color: string }>
@@ -247,6 +250,15 @@ function BoardRoom({ board }: { board: Board }) {
 	const refreshRef = useRef<() => void>(() => {});
 	const undoManagerRef = useRef<Y.UndoManager | null>(null);
 	const providerRef = useRef<HocuspocusProvider | null>(null);
+	useEffect(() => {
+		const update = () => setOnline(navigator.onLine);
+		window.addEventListener("online", update);
+		window.addEventListener("offline", update);
+		return () => {
+			window.removeEventListener("online", update);
+			window.removeEventListener("offline", update);
+		};
+	}, []);
 	useEffect(() => {
 		fetch(`/api/boards/${board.id}/members`)
 			.then(
@@ -510,10 +522,10 @@ function BoardRoom({ board }: { board: Board }) {
 			) : null}
 			<div className="flex flex-wrap items-center justify-between gap-4">
 				<div>
-					<h1 className="text-3xl font-bold">{board.name}</h1>
+					<h1 className="break-words text-3xl font-bold">{board.name}</h1>
 					<p className="mt-2 text-slate-500">Your collaborative workspace</p>
 				</div>
-				<div className="flex items-center gap-3">
+				<div className="flex flex-wrap items-center gap-3">
 					{board.role === "owner" ? (
 						<button
 							className="rounded-xl bg-white px-3 py-2 text-sm font-semibold shadow-sm"
@@ -561,11 +573,24 @@ function BoardRoom({ board }: { board: Board }) {
 					>
 						+ Add column
 					</button>
-					<p className="rounded-full bg-white px-3 py-1.5 text-sm font-medium text-slate-600 shadow-sm">
+					<p
+						aria-label="Connection status"
+						aria-live="polite"
+						className="rounded-full bg-white px-3 py-1.5 text-sm font-medium text-slate-600 shadow-sm"
+						role="status"
+					>
 						<span
-							className={`mr-2 inline-block size-2 rounded-full ${status === "connected" ? "bg-emerald-500" : status === "connecting" ? "bg-amber-500" : "bg-rose-500"}`}
+							className={`mr-2 inline-block size-2 rounded-full ${!online ? "bg-rose-500" : status === "connected" ? "bg-emerald-500" : status === "connecting" ? "bg-amber-500" : "bg-rose-500"}`}
 						/>
-						{synced ? "All changes synced" : status}
+						{!online
+							? "Offline"
+							: status === "connected"
+								? synced
+									? "Connected"
+									: "Syncing"
+								: status === "connecting"
+									? "Connecting"
+									: "Offline"}
 					</p>
 					{status === "disconnected" ? (
 						<button
@@ -1085,7 +1110,7 @@ export function App() {
 						<p className="px-3 py-2 text-sm text-slate-400">No boards yet</p>
 					) : null}
 				</nav>
-				<div className="mt-auto hidden border-t border-slate-100 pt-4 md:block">
+				<div className="mt-4 border-t border-slate-100 pt-4 md:mt-auto">
 					<button
 						className="w-full rounded-xl px-3 py-2 text-left text-sm font-medium text-slate-600 hover:bg-slate-100"
 						onClick={() =>
