@@ -1,0 +1,18 @@
+@import "tailwindcss";
+
+@theme {
+	--font-sans: "Outfit", ui-sans-serif, system-ui, sans-serif;
+	--color-canvas: #eef4f7;
+	--color-canvas-deep: #e3eef1;
+	--color-ink: var(--color-slate-900);
+	--color-primary: var(--color-teal-700);
+	--color-accent: var(--color-teal-500);
+	--color-violet-*: initial;
+	--color-purple-*: initial;
+	--color-indigo-*: initial;
+	--color-fuchsia-*: initial;
+}
+
+body {
+	@apply min-h-screen bg-linear-to-br from-canvas to-canvas-deep font-sans text-ink antialiased;
+}
